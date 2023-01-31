@@ -4,14 +4,42 @@ require 'pg'
 
 expense_db = PG.connect(dbname:'project1')
 
-expenses = expense_db.exec('SELECT * FROM expenses
-                            ORDER BY created_on')
+@expenses = expense_db.exec('SELECT * FROM expenses ORDER BY created_on')
 
-expenses.each do |tuple|
-  columns = [ tuple["id"].rjust(3),
-              tuple["created_on"].rjust(10),
-              tuple["amount"].rjust(12),
-              tuple["memo"] ]
+@command = ARGV[0]
+puts @command
 
-  puts columns.join(" | ")
+def display_list
+  @expenses.each do |tuple|
+    columns = [ tuple["id"].rjust(3),
+                tuple["created_on"].rjust(10),
+                tuple["amount"].rjust(12),
+                tuple["memo"] ]
+  
+    puts columns.join(" | ")
+  end
+end
+
+def display_help
+  puts <<~HELP 
+  An expense recording system
+  
+  Commands:\n\n
+  add AMOUNT MEMO - record a new expense
+  list - list all expenses
+  delete NUMBER - remove expense with id NUMBER
+  search QUERY - list expenses with a matching memo field
+  HELP
+end
+
+def display_info
+  
+end
+
+if !@command || @command.downcase == 'help'
+  display_help
+elsif @command.downcase == 'list'
+  display_list
+else
+  puts "Sorry, #{@command} is not valid"
 end
