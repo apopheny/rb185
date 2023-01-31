@@ -2,4 +2,16 @@
 
 require 'pg'
 
-p 'Hello World'
+expense_db = PG.connect(dbname:'project1')
+
+expenses = expense_db.exec('SELECT * FROM expenses
+                            ORDER BY created_on')
+
+expenses.each do |tuple|
+  columns = [ tuple["id"].rjust(3),
+              tuple["created_on"].rjust(10),
+              tuple["amount"].rjust(12),
+              tuple["memo"] ]
+
+  puts columns.join(" | ")
+end
