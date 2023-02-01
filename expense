@@ -2,12 +2,12 @@
 
 require 'pg'
 
-expense_db = PG.connect(dbname:'project1')
+@expense_db = PG.connect(dbname:'project1')
 
-@expenses = expense_db.exec('SELECT * FROM expenses ORDER BY created_on')
+@expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY created_on')
 
 @command = ARGV[0]
-puts @command
+
 
 def display_list
   @expenses.each do |tuple|
@@ -20,26 +20,50 @@ def display_list
   end
 end
 
+@help = <<~HELP 
+Commands:\n
+add AMOUNT MEMO - record a new expense
+list - list all expenses
+delete NUMBER - remove expense with id NUMBER
+search QUERY - list expenses with a matching memo field
+HELP
+
 def display_help
-  puts <<~HELP 
-  An expense recording system
-  
-  Commands:\n\n
-  add AMOUNT MEMO - record a new expense
-  list - list all expenses
-  delete NUMBER - remove expense with id NUMBER
-  search QUERY - list expenses with a matching memo field
-  HELP
+  puts "An expense recording system\n\n"
+  puts @help
 end
 
-def display_info
+def validate_add(command: ARGV)
+  return 'Please enter a valid amount' unless command[1].to_f > 0.0
+  case 
+  when command.size == 1
+    "You must specify an AMOUNT\n\n"
+  when command.size == 2
+    "You must specify a MEMO\n\n"
+  when command.size >= 4
+    "Your memo must be one word, or enclosed in \"double quotes\"\n\n"
+  else
+    false
+  end
+end
+
+def add_expense(cost: ARGV[1], item:ARGV[2])
+  error_help = validate_add
   
+  if !error_help
+    @expense_db.exec("INSERT INTO expenses(amount, memo) VALUES (#{cost}, '#{item}');")
+  else
+    puts error_help
+    puts @help
+  end
 end
 
 if !@command || @command.downcase == 'help'
   display_help
 elsif @command.downcase == 'list'
   display_list
+elsif @command.downcase == 'add'
+  add_expense
 else
   puts "Sorry, #{@command} is not valid"
 end
