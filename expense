@@ -1,8 +1,10 @@
 #! /usr/bin/env ruby
+# frozen_string_literal: true
 
 require 'pg'
 require 'date'
 
+# Receives arguments from CLI for app execution
 class CLI
   def initialize
     @application = ExpenseData.new
@@ -11,24 +13,6 @@ class CLI
   def run(args)
     @command = args[0]
     parse_command
-  end
-
-  def parse_command
-    if !@command || @command.downcase == 'help'
-      @application.display_help
-    elsif @command.downcase == 'list'
-      @application.display_list
-    elsif @command.downcase == 'add'
-      @application.add_expense
-    else
-      puts "Sorry, #{@command} is not valid"
-    end
-  end
-end
-
-class ExpenseData
-  def initialize
-    @expense_db = PG.connect(dbname: 'project1')
   end
 
   HELP = <<~HELP
@@ -42,6 +26,25 @@ class ExpenseData
   def display_help
     puts "An expense recording system\n\n"
     puts HELP
+  end
+
+  def parse_command
+    if !@command || @command.downcase == 'help'
+      display_help
+    elsif @command.downcase == 'list'
+      @application.display_list
+    elsif @command.downcase == 'add'
+      @application.add_expense
+    else
+      puts "Sorry, #{@command} is not valid"
+    end
+  end
+end
+
+# Handles expense list application SQL interactions
+class ExpenseData
+  def initialize
+    @expense_db = PG.connect(dbname: 'project1')
   end
 
   def display_list
