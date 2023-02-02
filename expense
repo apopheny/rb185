@@ -11,7 +11,12 @@ class CLI
   end
 
   def run(args)
-    @command = args[0]
+    if args.size == 4
+      @command,@cost,@item,@date = *args
+    elsif args.size == 2 && args[0].downcase == 'search'
+      @command,@item = *args
+    end
+
     parse_command
   end
 
@@ -34,7 +39,9 @@ class CLI
     elsif @command.downcase == 'list'
       @application.display_list
     elsif @command.downcase == 'add'
-      @application.add_expense
+      @application.add_expense(@cost, @item, @date)
+    elsif @command.downcase == 'search'
+      @application.search(@item)
     else
       puts "Sorry, #{@command} is not valid"
     end
@@ -49,6 +56,7 @@ class ExpenseData
 
   def display_list
     @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
+
     @expenses.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
@@ -59,8 +67,8 @@ class ExpenseData
     end
   end
 
-  def add_expense(cost: ARGV[1], item: ARGV[2], date: ARGV[3])
-    error_help = validate_add(cost: cost, item: item, date: date)
+  def add_expense(cost, item, date)
+    error_help = validate_add(cost, item, date)
 
     if !error_help
       @expense_db.exec_params('INSERT INTO expenses(amount, memo, created_on)'\
@@ -71,15 +79,7 @@ class ExpenseData
     end
   end
 
-  def validate_date(date_str)
-    Date.valid_date?(*date_str.split('-').map(&:to_i))
-  rescue ArgumentError, NameError
-    'The date you have entered is invalid.'
-  else
-    false
-  end
-
-  def validate_add(cost:, item:, date:)
+  def validate_add(cost, item, date)
     return 'Please enter a valid amount' unless cost.to_f > 0.0
 
     if !cost
@@ -92,6 +92,36 @@ class ExpenseData
       false
     end
   end
+
+  def validate_date(date_str)
+    begin
+    Date.valid_date?(*date_str.split('-').map(&:to_i))
+    rescue ArgumentError, NameError
+      return 'The date you have entered is invalid.'
+    else
+      false
+    end
+  end
+  
+  def search(item)
+    item = "%#{item}%"
+    query = @expense_db.exec_params('SELECT * FROM expenses WHERE memo ILIKE $1'\
+      'ORDER BY id,created_on;', [item]).values
+    display_result(query)
+  end
+
+  def display_result(query)
+    p query
+    query.each do |tuple|
+      columns = [tuple['id'].rjust(3),
+                 tuple['created_on'].rjust(10),
+                 tuple['amount'].rjust(12),
+                 tuple['memo']]
+
+      puts columns.join(' | ')
+    end
+  end
+
 end
 
 CLI.new.run(ARGV)
