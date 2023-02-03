@@ -11,7 +11,7 @@ class CLI
   end
 
   def run(args)
-    if args.size == 4
+    if args.size == 4 || args[0].downcase == 'list'
       @command,@cost,@item,@date = *args
     elsif args.size == 2 && args[0].downcase == 'search'
       @command,@item = *args
@@ -56,7 +56,7 @@ class ExpenseData
 
   def display_list
     @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
-
+    
     @expenses.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
@@ -106,13 +106,14 @@ class ExpenseData
   def search(item)
     item = "%#{item}%"
     query = @expense_db.exec_params('SELECT * FROM expenses WHERE memo ILIKE $1'\
-      'ORDER BY id,created_on;', [item]).values
+      'ORDER BY id,created_on;', [item])
+    
     display_result(query)
   end
 
   def display_result(query)
-    p query
     query.each do |tuple|
+      
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
                  tuple['amount'].rjust(12),
