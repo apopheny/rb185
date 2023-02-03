@@ -18,7 +18,7 @@ class CLI
       puts "Sorry, command \'#{args[0]}\' is not valid\n\n"
     elsif ['add'].include?(args[0].downcase)
       @command, @cost, @item, @date = *args
-    elsif %w(search delete clear list).include?(args[0].downcase)
+    elsif %w[search delete clear list].include?(args[0].downcase)
       @command, @item = *args
     end
 
@@ -63,16 +63,25 @@ class ExpenseData
 
   def display_list
     @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
-    puts "No items have been entered." if @expenses.ntuples == 0
-    
+    expense_num = @expenses.ntuples
+    puts "There #{expense_num == 1 ? 'is' : 'are'} #{expense_num} "\
+      "expense#{'s' if expense_num != 1}."
+    max_row_size = 0
     @expenses.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
                  tuple['amount'].rjust(12),
                  tuple['memo']]
-
+      row_size = columns.map(&:size).sum + columns[-1].size
+      max_row_size = row_size if row_size > max_row_size
       puts columns.join(' | ')
     end
+    puts '-' * max_row_size
+    puts "Total:#{' ' * 19}#{total_list.values[0][0]}"
+  end
+
+  def total_list
+    @expense_db.exec('SELECT sum(amount) FROM expenses;')
   end
 
   def add_expense(cost, item, date)
@@ -155,7 +164,7 @@ class ExpenseData
 
   def delete_all_expenses
     puts 'This will remove all expenses. Are you sure? (y/n)'
-    answer = STDIN.raw(&:getch)
+    answer = $stdin.raw(&:getch)
     @expense_db.exec('DELETE FROM expenses;') if answer == 'y'
     puts 'All expenses have been deleted.'
   end
