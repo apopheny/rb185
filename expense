@@ -3,10 +3,11 @@
 
 require 'pg'
 require 'date'
+require 'io/console'
 
 # Receives arguments from CLI for app execution
 class CLI
-  COMMANDS = %w[help list add search delete].freeze
+  COMMANDS = %w[help list add search delete clear].freeze
 
   def initialize
     @application = ExpenseData.new
@@ -17,12 +18,8 @@ class CLI
       puts "Sorry, command \'#{args[0]}\' is not valid\n\n"
     elsif ['add'].include?(args[0].downcase)
       @command, @cost, @item, @date = *args
-    elsif args[0].downcase == 'search'
+    elsif %w(search delete clear list).include?(args[0].downcase)
       @command, @item = *args
-    elsif args[0].downcase == 'delete'
-      @command, @item = *args
-    else
-      @command = args[0]
     end
 
     parse_command
@@ -52,6 +49,8 @@ class CLI
       @application.search(@item)
     elsif @command == 'delete'
       @application.delete_expense(@item)
+    elsif @command == 'clear'
+      @application.delete_all_expenses
     end
   end
 end
@@ -64,7 +63,8 @@ class ExpenseData
 
   def display_list
     @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
-
+    puts "No items have been entered." if @expenses.ntuples == 0
+    
     @expenses.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
@@ -133,24 +133,31 @@ class ExpenseData
       puts columns.join(' | ')
     end
   end
-  
+
   def delete_expense(id)
     deleted_expense = @expense_db.exec_params('SELECT * FROM expenses WHERE id = $1;', [id])
-    
-    if deleted_expense.ntuples == 0
-      puts "There is no expense with the id #{id ? id : 'BLANK'}."
+
+    if deleted_expense.ntuples.zero?
+      puts "There is no expense with the id #{id || 'BLANK'}."
     else
       query = @expense_db.exec_params('DELETE FROM expenses WHERE id = $1;', [id])
-      puts "The following expense was deleted:"
+      puts 'The following expense was deleted:'
       deleted_expense.each do |tuple|
         columns = [tuple['id'].rjust(3),
                    tuple['created_on'].rjust(10),
                    tuple['amount'].rjust(12),
                    tuple['memo']]
-  
+
         puts columns.join(' | ')
       end
     end
+  end
+
+  def delete_all_expenses
+    puts 'This will remove all expenses. Are you sure? (y/n)'
+    answer = STDIN.raw(&:getch)
+    @expense_db.exec('DELETE FROM expenses;') if answer == 'y'
+    puts 'All expenses have been deleted.'
   end
 end
 
