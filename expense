@@ -6,15 +6,21 @@ require 'date'
 
 # Receives arguments from CLI for app execution
 class CLI
+  COMMANDS = %w[help list add search delete].freeze
+
   def initialize
     @application = ExpenseData.new
   end
 
   def run(args)
-    if args.size == 4 || args[0].downcase == 'list'
-      @command,@cost,@item,@date = *args
-    elsif args.size == 2 && args[0].downcase == 'search'
-      @command,@item = *args
+    if COMMANDS.include?(args[0]) == false
+      puts "Sorry, command \'#{args[0]}\' is not valid\n\n"
+    elsif ['add'].include?(args[0])
+      @command, @cost, @item, @date = *args
+    elsif args[0].downcase == 'search'
+      @command, @item = *args
+    else
+      @command = args[0]
     end
 
     parse_command
@@ -42,8 +48,6 @@ class CLI
       @application.add_expense(@cost, @item, @date)
     elsif @command.downcase == 'search'
       @application.search(@item)
-    else
-      puts "Sorry, #{@command} is not valid"
     end
   end
 end
@@ -56,7 +60,7 @@ class ExpenseData
 
   def display_list
     @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
-    
+
     @expenses.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
@@ -94,26 +98,29 @@ class ExpenseData
   end
 
   def validate_date(date_str)
-    begin
     Date.valid_date?(*date_str.split('-').map(&:to_i))
-    rescue ArgumentError, NameError
-      return 'The date you have entered is invalid.'
-    else
-      false
-    end
+  rescue ArgumentError, NameError
+    'The date you have entered is invalid.'
+  else
+    false
   end
-  
+
   def search(item)
-    item = "%#{item}%"
+    @item = item
+    if @item
+      @item = "%#{@item}%"
+    else
+      puts 'Please enter a search term.'
+    end
+
     query = @expense_db.exec_params('SELECT * FROM expenses WHERE memo ILIKE $1'\
-      'ORDER BY id,created_on;', [item])
-    
+      'ORDER BY id,created_on;', [@item])
+
     display_result(query)
   end
 
   def display_result(query)
     query.each do |tuple|
-      
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
                  tuple['amount'].rjust(12),
@@ -122,7 +129,6 @@ class ExpenseData
       puts columns.join(' | ')
     end
   end
-
 end
 
 CLI.new.run(ARGV)
