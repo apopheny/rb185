@@ -12,7 +12,7 @@ class CLI
   def initialize
     @application = ExpenseData.new
   end
-
+  
   def run(args)
     if COMMANDS.include?(args[0]) == false
       puts "Sorry, command \'#{args[0]}\' is not valid\n\n"
@@ -59,29 +59,72 @@ end
 class ExpenseData
   def initialize
     @expense_db = PG.connect(dbname: 'project1')
+    setup_schema
   end
 
-  def display_list
-    @expenses = @expense_db.exec('SELECT * FROM expenses ORDER BY id')
-    expense_num = @expenses.ntuples
-    puts "There #{expense_num == 1 ? 'is' : 'are'} #{expense_num} "\
-      "expense#{'s' if expense_num != 1}."
+  def setup_schema
+    result = @expense_db.exec <<~PSQL
+      SELECT count(*) FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'expenses';
+    PSQL
+    
+    if result.values[0][0] == '0'
+      @expense_db.exec <<~PSQL
+      CREATE TABLE expenses(
+      id serial PRIMARY KEY,
+      amount numeric(6,2) NOT NULL,
+      memo text NOT NULL,
+      created_on date NOT NULL
+      DEFAULT date(now()),
+      check (amount > 0)
+      );
+      PSQL
+    end
+  end
+
+  def number_of_expenses_str(expense_num)
+    "There #{expense_num == 1 ? 'is' : 'are'} #{expense_num} "\
+      "expense#{'s' if expense_num != 1}.\n\n"
+  end
+
+  def display_result(query)
     max_row_size = 0
-    @expenses.each do |tuple|
+    query.each do |tuple|
       columns = [tuple['id'].rjust(3),
                  tuple['created_on'].rjust(10),
                  tuple['amount'].rjust(12),
                  tuple['memo']]
-      row_size = columns.map(&:size).sum + columns[-1].size
-      max_row_size = row_size if row_size > max_row_size
-      puts columns.join(' | ')
+
+      row = columns.join(' | ')
+      puts row
+      max_row_size = row.size if row.size > max_row_size
     end
-    puts '-' * max_row_size
-    puts "Total:#{' ' * 19}#{total_list.values[0][0]}"
+    { max_row_size: max_row_size }
   end
 
-  def total_list
-    @expense_db.exec('SELECT sum(amount) FROM expenses;')
+  def display_list(*query)
+    @expenses = if query.empty?
+                  @expense_db.exec('SELECT * FROM expenses ORDER BY id')
+                else
+                  @expense_db.exec_params('SELECT * FROM expenses WHERE memo ILIKE $1'\
+                    'ORDER BY id,created_on;', [query[0]])
+                end
+
+    puts number_of_expenses_str(@expenses.ntuples)
+    spacing = display_result(@expenses)
+    total = total_list(query[0]).values[0][0]
+
+    total_expense_size = 25 - total.to_s.size
+    puts '-' * spacing[:max_row_size]
+    puts "Total:#{' ' * total_expense_size}#{total}" if @expense_db.exec('SELECT * FROM expenses;').ntuples.positive?
+  end
+
+  def total_list(*str)
+    if str[0].nil?
+      @expense_db.exec('SELECT sum(amount) FROM expenses;')
+    else
+      @expense_db.exec_params('SELECT sum(amount) FROM expenses where memo ILIKE $1;', [str[0]])
+    end
   end
 
   def add_expense(cost, item, date)
@@ -126,21 +169,7 @@ class ExpenseData
       puts 'Please enter a search term.'
     end
 
-    query = @expense_db.exec_params('SELECT * FROM expenses WHERE memo ILIKE $1'\
-      'ORDER BY id,created_on;', [@item])
-
-    display_result(query)
-  end
-
-  def display_result(query)
-    query.each do |tuple|
-      columns = [tuple['id'].rjust(3),
-                 tuple['created_on'].rjust(10),
-                 tuple['amount'].rjust(12),
-                 tuple['memo']]
-
-      puts columns.join(' | ')
-    end
+    display_list(@item)
   end
 
   def delete_expense(id)
@@ -149,24 +178,20 @@ class ExpenseData
     if deleted_expense.ntuples.zero?
       puts "There is no expense with the id #{id || 'BLANK'}."
     else
-      query = @expense_db.exec_params('DELETE FROM expenses WHERE id = $1;', [id])
+      @expense_db.exec_params('DELETE FROM expenses WHERE id = $1;', [id])
       puts 'The following expense was deleted:'
-      deleted_expense.each do |tuple|
-        columns = [tuple['id'].rjust(3),
-                   tuple['created_on'].rjust(10),
-                   tuple['amount'].rjust(12),
-                   tuple['memo']]
-
-        puts columns.join(' | ')
-      end
+      display_result(deleted_expense)
     end
   end
 
   def delete_all_expenses
     puts 'This will remove all expenses. Are you sure? (y/n)'
     answer = $stdin.raw(&:getch)
-    @expense_db.exec('DELETE FROM expenses;') if answer == 'y'
-    puts 'All expenses have been deleted.'
+    if answer == 'y'
+      @expense_db.exec('DELETE FROM expenses;') 
+      puts "All expenses have been deleted.\n\n"
+    end
+    display_list
   end
 end
 
